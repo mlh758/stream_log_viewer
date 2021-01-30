@@ -9,6 +9,7 @@ import React, { useState, useEffect } from "react";
 import { createStyles, makeStyles } from "@material-ui/core/styles";
 interface Props {
   streamName: string;
+  limit: number;
 }
 
 const useStyles = makeStyles(() =>
@@ -19,16 +20,19 @@ const useStyles = makeStyles(() =>
     },
   })
 );
-const LogTailer: React.FC<Props> = ({ streamName }) => {
+const LogTailer: React.FC<Props> = ({ streamName, limit }) => {
   let [logs, setLogs] = useState<string[]>([]);
   const classes = useStyles();
   useEffect(() => {
     const socket = new WebSocket(`ws://localhost:3000/api/tail/${streamName}`);
     socket.addEventListener("message", (event) => {
-      setLogs((l) => l.concat(JSON.parse(event.data)));
+      setLogs((l) => {
+        let newLogs = l.concat(JSON.parse(event.data));
+        return newLogs.slice(Math.max(l.length - limit, 0));
+      });
     });
     return () => socket.close();
-  }, [streamName]);
+  }, [streamName, limit]);
   return (
     <Container maxWidth="lg">
       <Paper className={classes.panelSize}>

@@ -15,11 +15,13 @@ impl LogListener {
     pub fn new(redis: PooledConnection<redis::Client>, log_key: String) -> Self {
         LogListener { redis, log_key }
     }
-    // TODO: check of log_chan has been closed in the loop
     pub async fn tail_log(&mut self, ws: WebSocket) {
         let log_chan = self.mediate_messages(ws);
         let mut last_id = "0".to_string();
         loop {
+            if log_chan.is_closed() {
+                return;
+            }
             let read_opts = StreamReadOptions::default().count(50);
             let log_reply: RedisResult<StreamReadReply> =
                 self.redis
