@@ -11,9 +11,17 @@ import {
 } from "@material-ui/core";
 import { createStyles, makeStyles, Theme } from "@material-ui/core/styles";
 import LogTailer from "./LogTailer";
+import LogSearcher from "./LogSearcher";
+import SearchControls from "./SearchControls";
 
 interface Props {
   streams: string[];
+}
+
+interface SearchOptions {
+  startAt: Date;
+  endAt: Date;
+  term: string | null;
 }
 
 const useStyles = makeStyles((theme: Theme) =>
@@ -32,10 +40,15 @@ const StreamPanel: React.FC<Props> = ({ streams }) => {
   const [stream, setStream] = useState<string>("");
   const [tailing, setTailing] = useState(false);
   const [logLimit, setLogLimit] = useState(logLimitOptions[0]);
+  const [search, setSearch] = useState<SearchOptions | null>(null);
   const handleStreamChanged = (
     event: React.ChangeEvent<{ value: unknown }>
   ) => {
-    setStream(event.target.value as string);
+    const newStream = event.target.value as string;
+    setStream(newStream);
+    if (newStream === "") {
+      setTailing(false);
+    }
   };
   const handleTailingChanged = (event: React.ChangeEvent<HTMLInputElement>) => {
     setTailing(event.target.checked);
@@ -43,6 +56,11 @@ const StreamPanel: React.FC<Props> = ({ streams }) => {
   const handleLimitChanged = (event: React.ChangeEvent<{ value: unknown }>) => {
     setLogLimit(event.target.value as number);
   };
+
+  const handleSearch = (startAt: Date, endAt: Date, term: string | null) => {
+    setSearch({ startAt, endAt, term });
+  };
+
   return (
     <Grid container spacing={3}>
       <Grid item xs={12}>
@@ -70,7 +88,7 @@ const StreamPanel: React.FC<Props> = ({ streams }) => {
           </Select>
         </div>
         <div className={styles.controlSpacing}>
-          <InputLabel id="log-limit-label">Log Item Limit</InputLabel>
+          <InputLabel id="log-limit-label">Log Tail Line Limit</InputLabel>
           <Select
             labelId="log-limit-label"
             id="log-limit"
@@ -89,6 +107,7 @@ const StreamPanel: React.FC<Props> = ({ streams }) => {
             <FormControlLabel
               control={
                 <Switch
+                  disabled={stream === ""}
                   checked={tailing}
                   onChange={handleTailingChanged}
                   name="tailLogs"
@@ -98,10 +117,21 @@ const StreamPanel: React.FC<Props> = ({ streams }) => {
             />
           </FormGroup>
         </div>
+        <SearchControls
+          disabled={stream === "" || tailing}
+          controlSpacing={styles.controlSpacing}
+          onSearch={handleSearch}
+        />
       </Grid>
       <Grid item xs={8}>
-        {stream.length > 0 && tailing && (
-          <LogTailer streamName={stream} limit={logLimit} />
+        {tailing && <LogTailer streamName={stream} limit={logLimit} />}
+        {search !== null && !tailing && (
+          <LogSearcher
+            startAt={search.startAt}
+            endAt={search.endAt}
+            term={search.term}
+            stream={stream}
+          />
         )}
       </Grid>
     </Grid>

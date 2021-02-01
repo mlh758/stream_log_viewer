@@ -5,6 +5,8 @@ import Typography from "@material-ui/core/Typography";
 import Toolbar from "@material-ui/core/Toolbar";
 import LoadingState from "./LoadingState";
 import { LinearProgress } from "@material-ui/core";
+import { MuiPickersUtilsProvider } from "@material-ui/pickers";
+import DateFnsUtils from "@date-io/date-fns";
 import StreamPanel from "./StreamPanel";
 
 const useStyles = makeStyles((theme: Theme) =>
@@ -42,7 +44,11 @@ const App = () => {
         setLoading(LoadingState.Ready);
         setLogStreams(data);
       })
-      .catch(() => setLoading(LoadingState.Error));
+      .catch((e) => {
+        if (e.name !== "AbortError") {
+          setLoading(LoadingState.Error);
+        }
+      });
     return () => controller.abort();
   }, []);
   return (
@@ -54,10 +60,16 @@ const App = () => {
           </Typography>
         </Toolbar>
       </AppBar>
-      <main className={classes.contentSpacing}>
-        {loading === LoadingState.Loading && <LinearProgress variant="query" />}
-        {loading === LoadingState.Ready && <StreamPanel streams={logStreams} />}
-      </main>
+      <MuiPickersUtilsProvider utils={DateFnsUtils}>
+        <main className={classes.contentSpacing}>
+          {loading === LoadingState.Loading && (
+            <LinearProgress variant="query" />
+          )}
+          {loading === LoadingState.Ready && (
+            <StreamPanel streams={logStreams} />
+          )}
+        </main>
+      </MuiPickersUtilsProvider>
     </div>
   );
 };

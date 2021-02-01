@@ -1,39 +1,40 @@
 use futures::{SinkExt, StreamExt};
 use mpsc::UnboundedSender;
-use r2d2::PooledConnection;
-use redis::{streams::StreamReadOptions, streams::StreamReadReply, Commands, RedisResult};
+use redis::{
+    aio::ConnectionManager,
+    streams::StreamReadOptions,
+    streams::{StreamRangeReply, StreamReadReply},
+    AsyncCommands, RedisResult,
+};
 use tokio::select;
 use tokio::sync::mpsc;
-use tokio::time::{sleep, Duration};
 use warp::ws::{Message, WebSocket};
 pub struct LogListener {
-    redis: PooledConnection<redis::Client>,
+    redis: ConnectionManager,
     log_key: String,
 }
 
 impl LogListener {
-    pub fn new(redis: PooledConnection<redis::Client>, log_key: String) -> Self {
+    pub fn new(redis: ConnectionManager, log_key: String) -> Self {
         LogListener { redis, log_key }
     }
     pub async fn tail_log(&mut self, ws: WebSocket) {
         let log_chan = self.mediate_messages(ws);
-        let mut last_id = "0".to_string();
+        let mut last_id = "$".to_string();
         loop {
             if log_chan.is_closed() {
                 return;
             }
-            let read_opts = StreamReadOptions::default().count(50);
-            let log_reply: RedisResult<StreamReadReply> =
-                self.redis
-                    .xread_options(&[&self.log_key], &[&last_id], read_opts);
+            let read_opts = StreamReadOptions::default().count(50).block(5000);
+            let log_reply: RedisResult<StreamReadReply> = self
+                .redis
+                .xread_options(&[&self.log_key], &[&last_id], read_opts)
+                .await;
             match log_reply {
                 Ok(reply) => {
                     let mut lines = Vec::new();
                     if reply.keys.len() == 0 {
-                        // we should use the blocking version of this command later, but need async redis working first
-                        println!("no new logs, waiting before trying again");
-                        sleep(Duration::from_secs(5)).await;
-                        continue;
+                        continue; // just wait again if no logs came through
                     }
                     for val in &reply.keys[0].ids {
                         last_id = val.id.clone();
@@ -101,4 +102,24 @@ impl LogListener {
         });
         tx
     }
+}
+
+pub fn flatten_xrange(range: StreamRangeReply, term: Option<String>) -> Vec<String> {
+    let mut results = Vec::new();
+    for stream_id in &range.ids {
+        for (_k, v) in &stream_id.map {
+            if let redis::Value::Data(bytes) = v {
+                results.push(
+                    String::from_utf8(bytes.to_owned()).expect("redis should always have utf8"),
+                );
+            }
+        }
+    }
+    if let Some(term) = term {
+        return results
+            .into_iter()
+            .filter(|line| line.contains(&term))
+            .collect();
+    }
+    results
 }
