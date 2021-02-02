@@ -1,4 +1,5 @@
 use futures::{SinkExt, StreamExt};
+use log::{error, info, warn};
 use mpsc::UnboundedSender;
 use redis::{
     aio::ConnectionManager,
@@ -48,12 +49,12 @@ impl LogListener {
                         }
                     }
                     if let Err(_) = log_chan.send(lines) {
-                        println!("Unable to send log lines on channel");
+                        warn!("Unable to send log lines on channel");
                         break;
                     }
                 }
                 Err(e) => {
-                    println!("Stream read failed: {}", e);
+                    warn!("Stream read failed: {}", e);
                     drop(log_chan);
                     break;
                 }
@@ -69,10 +70,10 @@ impl LogListener {
                     msg_result = ws_rx.next() => {
                         match msg_result {
                             None => break,
-                            Some(Err(_)) => println!("error getting message"),
+                            Some(Err(e)) => error!("error getting message: {}", e),
                             Some(Ok(msg)) => {
                                 if msg.is_close() {
-                                    println!("socket closed by client");
+                                    info!("socket closed by client");
                                     drop(rx);
                                     break;
                                 }
@@ -82,15 +83,14 @@ impl LogListener {
                     lines = rx.recv() => {
                         match lines {
                             None => {
-                                println!("no more logs");
                                 if let Err(_) = ws_tx.send(Message::close()).await {
-                                    println!("unable to send close message to client");
+                                    warn!("unable to send close message to client");
                                 }
                                 break;
                             }
                             Some(logs) => {
                                 if let Err(_) = ws_tx.send(Message::text(serde_json::to_string(&logs).unwrap())).await {
-                                    println!("error sending message to client");
+                                    error!("error sending message to client");
                                     break;
                                 }
                             }

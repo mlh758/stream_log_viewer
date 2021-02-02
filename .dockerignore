@@ -1,0 +1,7 @@
+/public
+/target
+README.md
+.gitignore
+.git
+/client/node_modules
+/client/build

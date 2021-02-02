@@ -5,8 +5,6 @@ This is a log viewer for logs written to Redis streams. There is a Rails impleme
 ## TODO
 
 1. Tests
-2. Configurable Redis connection
-3. Self-host static content from React app so that this can be deployed somewhere
 
 ## Running for development
 
