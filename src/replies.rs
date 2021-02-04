@@ -7,6 +7,8 @@ use redis::{
     streams::{StreamRangeReply, StreamReadReply},
     AsyncCommands, RedisResult,
 };
+use serde_derive::Deserialize;
+use std::convert::Infallible;
 use tokio::select;
 use tokio::sync::mpsc;
 use warp::ws::{Message, WebSocket};
@@ -109,8 +111,8 @@ fn string_or_none(val: redis::Value) -> Option<String> {
         _ => None,
     }
 }
-
-pub fn flatten_xrange(range: StreamRangeReply, term: Option<String>) -> Vec<String> {
+// converts a StreamRangeReply to a Vec of strings by flattening out all the maps
+fn flatten_xrange(range: StreamRangeReply, term: &Option<String>) -> Vec<String> {
     let values = range
         .ids
         .into_iter()
@@ -118,7 +120,55 @@ pub fn flatten_xrange(range: StreamRangeReply, term: Option<String>) -> Vec<Stri
         .filter_map(string_or_none);
 
     if let Some(term) = term {
-        return values.filter(|line| line.contains(&term)).collect();
+        return values.filter(|line| line.contains(term)).collect();
     }
     values.collect()
+}
+
+#[derive(Deserialize)]
+pub struct SearchParams {
+    start: chrono::DateTime<chrono::Utc>,
+    end: chrono::DateTime<chrono::Utc>,
+    term: Option<String>,
+}
+
+pub async fn search_logs(
+    log_stream: String,
+    params: SearchParams,
+    mut redis: ConnectionManager,
+) -> Result<Box<dyn warp::Reply>, Infallible> {
+    let mut start_at = format!("{}-0", params.start.timestamp_millis());
+    let end_at = params.end.timestamp_millis();
+    let mut reply: Vec<String> = Vec::new();
+    loop {
+        let range: RedisResult<StreamRangeReply> = redis
+            .xrange_count(&log_stream, &start_at, end_at, 1000)
+            .await;
+        match range {
+            Ok(xrange) => {
+                if xrange.ids.is_empty() {
+                    break;
+                }
+                let returned_count = xrange.ids.len();
+                let new_start_at = xrange.ids.iter().last().unwrap().id.clone();
+                // protect against having exactly 1000 items left in the stream
+                if new_start_at == start_at {
+                    break;
+                }
+                start_at = new_start_at;
+                let mut data = flatten_xrange(xrange, &params.term);
+                reply.append(&mut data);
+                // stop if we already have 1000 results or Redis returned fewer than our batch size
+                if reply.len() > 1000 || returned_count < 1000 {
+                    break;
+                }
+            }
+            Err(e) => {
+                error!("error getting log range: {}", e);
+                return Ok(Box::new(warp::http::StatusCode::INTERNAL_SERVER_ERROR));
+            }
+        }
+    }
+    reply.truncate(1000);
+    Ok(Box::new(warp::reply::json(&reply)))
 }

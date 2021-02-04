@@ -32,9 +32,9 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {
         .and_then(get_log_keys);
     let search_pool = pool.clone();
     let search_logs = warp::path!("search_logs" / String)
-        .and(warp::query::<SearchParams>())
+        .and(warp::query::<replies::SearchParams>())
         .and(with_redis(search_pool))
-        .and_then(search_logs);
+        .and_then(replies::search_logs);
     let static_assets = warp::any().and(warp::fs::dir("./public/"));
     let routes = api_routes
         .and(log_stream.or(available_logs).or(search_logs))
@@ -84,37 +84,6 @@ fn with_redis(
     redis: ConnectionManager,
 ) -> impl Filter<Extract = (ConnectionManager,), Error = Infallible> + Clone {
     warp::any().map(move || redis.clone())
-}
-#[derive(Deserialize)]
-struct SearchParams {
-    start: chrono::DateTime<chrono::Utc>,
-    end: chrono::DateTime<chrono::Utc>,
-    term: Option<String>,
-}
-
-async fn search_logs(
-    log_stream: String,
-    params: SearchParams,
-    mut redis: ConnectionManager,
-) -> Result<Box<dyn warp::Reply>, Infallible> {
-    match redis
-        .xrange_count(
-            &log_stream,
-            params.start.timestamp_millis(),
-            params.end.timestamp_millis(),
-            1000,
-        )
-        .await
-    {
-        Ok(range) => {
-            let data = replies::flatten_xrange(range, params.term);
-            Ok(Box::new(warp::reply::json(&data)))
-        }
-        Err(e) => {
-            error!("error getting log range: {}", e);
-            Ok(Box::new(warp::http::StatusCode::INTERNAL_SERVER_ERROR))
-        }
-    }
 }
 
 async fn get_log_keys(mut redis: ConnectionManager) -> Result<Box<dyn warp::Reply>, Infallible> {
