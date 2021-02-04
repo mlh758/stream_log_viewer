@@ -34,12 +34,12 @@ impl LogListener {
             match log_reply {
                 Ok(reply) => {
                     let mut lines = Vec::new();
-                    if reply.keys.len() == 0 {
+                    if reply.keys.is_empty() {
                         continue; // just wait again if no logs came through
                     }
                     for val in &reply.keys[0].ids {
                         last_id = val.id.clone();
-                        for (_k, v) in &val.map {
+                        for v in val.map.values() {
                             if let redis::Value::Data(bytes) = v {
                                 lines.push(
                                     String::from_utf8(bytes.to_owned())
@@ -48,7 +48,7 @@ impl LogListener {
                             }
                         }
                     }
-                    if let Err(_) = log_chan.send(lines) {
+                    if log_chan.send(lines).is_err() {
                         warn!("Unable to send log lines on channel");
                         break;
                     }
@@ -83,13 +83,13 @@ impl LogListener {
                     lines = rx.recv() => {
                         match lines {
                             None => {
-                                if let Err(_) = ws_tx.send(Message::close()).await {
+                                if ws_tx.send(Message::close()).await.is_err() {
                                     warn!("unable to send close message to client");
                                 }
                                 break;
                             }
                             Some(logs) => {
-                                if let Err(_) = ws_tx.send(Message::text(serde_json::to_string(&logs).unwrap())).await {
+                                if ws_tx.send(Message::text(serde_json::to_string(&logs).unwrap())).await.is_err() {
                                     error!("error sending message to client");
                                     break;
                                 }
@@ -107,7 +107,7 @@ impl LogListener {
 pub fn flatten_xrange(range: StreamRangeReply, term: Option<String>) -> Vec<String> {
     let mut results = Vec::new();
     for stream_id in &range.ids {
-        for (_k, v) in &stream_id.map {
+        for v in stream_id.map.values() {
             if let redis::Value::Data(bytes) = v {
                 results.push(
                     String::from_utf8(bytes.to_owned()).expect("redis should always have utf8"),
