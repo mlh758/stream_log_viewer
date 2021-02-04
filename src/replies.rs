@@ -32,23 +32,19 @@ impl LogListener {
                 .xread_options(&[&self.log_key], &[&last_id], read_opts)
                 .await;
             match log_reply {
-                Ok(reply) => {
-                    let mut lines = Vec::new();
+                Ok(mut reply) => {
                     if reply.keys.is_empty() {
                         continue; // just wait again if no logs came through
                     }
-                    for val in &reply.keys[0].ids {
-                        last_id = val.id.clone();
-                        for v in val.map.values() {
-                            if let redis::Value::Data(bytes) = v {
-                                lines.push(
-                                    String::from_utf8(bytes.to_owned())
-                                        .expect("redis should always have utf8"),
-                                );
-                            }
-                        }
-                    }
-                    if log_chan.send(lines).is_err() {
+                    last_id = reply.keys[0].ids.iter().last().unwrap().id.clone();
+                    let values = reply
+                        .keys
+                        .remove(0)
+                        .ids
+                        .into_iter()
+                        .flat_map(|id| id.map.into_iter().map(|(_, v)| v))
+                        .filter_map(string_or_none);
+                    if log_chan.send(values.collect()).is_err() {
                         warn!("Unable to send log lines on channel");
                         break;
                     }
@@ -104,22 +100,25 @@ impl LogListener {
     }
 }
 
+fn string_or_none(val: redis::Value) -> Option<String> {
+    match val {
+        redis::Value::Data(bytes) => match String::from_utf8(bytes) {
+            Ok(s) => Some(s),
+            Err(_) => None,
+        },
+        _ => None,
+    }
+}
+
 pub fn flatten_xrange(range: StreamRangeReply, term: Option<String>) -> Vec<String> {
-    let mut results = Vec::new();
-    for stream_id in &range.ids {
-        for v in stream_id.map.values() {
-            if let redis::Value::Data(bytes) = v {
-                results.push(
-                    String::from_utf8(bytes.to_owned()).expect("redis should always have utf8"),
-                );
-            }
-        }
-    }
+    let values = range
+        .ids
+        .into_iter()
+        .flat_map(|id| id.map.into_iter().map(|(_, v)| v))
+        .filter_map(string_or_none);
+
     if let Some(term) = term {
-        return results
-            .into_iter()
-            .filter(|line| line.contains(&term))
-            .collect();
+        return values.filter(|line| line.contains(&term)).collect();
     }
-    results
+    values.collect()
 }
