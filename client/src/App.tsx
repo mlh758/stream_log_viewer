@@ -7,6 +7,7 @@ import LoadingState from "./LoadingState";
 import { LinearProgress } from "@material-ui/core";
 import { MuiPickersUtilsProvider } from "@material-ui/pickers";
 import DateFnsUtils from "@date-io/date-fns";
+import Alert from "@material-ui/lab/Alert";
 import StreamPanel from "./StreamPanel";
 
 const useStyles = makeStyles((theme: Theme) =>
@@ -64,6 +65,11 @@ const App = () => {
         <main className={classes.contentSpacing}>
           {loading === LoadingState.Loading && (
             <LinearProgress variant="query" />
+          )}
+          {loading === LoadingState.Error && (
+            <Alert severity="error">
+              Unable to load available log streams.
+            </Alert>
           )}
           {loading === LoadingState.Ready && (
             <StreamPanel streams={logStreams} />

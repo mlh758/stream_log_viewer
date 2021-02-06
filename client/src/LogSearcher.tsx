@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { Container, LinearProgress } from "@material-ui/core";
+import Alert from "@material-ui/lab/Alert";
 import LoadingState from "./LoadingState";
 import LogList from "./LogList";
 
@@ -42,6 +43,9 @@ const LogSearcher: React.FC<Props> = ({ startAt, endAt, term, stream }) => {
   return (
     <Container>
       {loading === LoadingState.Loading && <LinearProgress />}
+      {loading === LoadingState.Error && (
+        <Alert severity="error">Something went wrong searching the logs.</Alert>
+      )}
       {loading === LoadingState.Ready && <LogList logs={logs} />}
     </Container>
   );
