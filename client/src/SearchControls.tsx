@@ -33,6 +33,7 @@ const SearchControls: React.FC<Props> = ({
     <>
       <div className={controlSpacing}>
         <KeyboardDateTimePicker
+          disabled={disabled}
           label="Log Range Start"
           value={startAt}
           onChange={setStartAt}
@@ -40,6 +41,7 @@ const SearchControls: React.FC<Props> = ({
       </div>
       <div className={controlSpacing}>
         <KeyboardDateTimePicker
+          disabled={disabled}
           label="Log Range End"
           value={endAt}
           onChange={setEndAt}
@@ -48,6 +50,7 @@ const SearchControls: React.FC<Props> = ({
       <div className={controlSpacing}>
         <InputLabel htmlFor="log-search-text">Log Search</InputLabel>
         <Input
+          disabled={disabled}
           id="log-search-text"
           value={searchText}
           onChange={handleSearchChanged}

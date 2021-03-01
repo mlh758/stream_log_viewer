@@ -51,6 +51,7 @@ const StreamPanel: React.FC<Props> = ({ streams }) => {
     }
   };
   const handleTailingChanged = (event: React.ChangeEvent<HTMLInputElement>) => {
+    setSearch(null);
     setTailing(event.target.checked);
   };
   const handleLimitChanged = (event: React.ChangeEvent<{ value: unknown }>) => {
